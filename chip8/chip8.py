@@ -1,105 +1,84 @@
-# import instructions
 import random
-import numpy
 import time
-import pygame
 
-#setup graphics
-
-#setup input
-
-#initialize other stuff
-
-#load game
-
-#emulation loop
-    #do cycle
-        #fetch
-        #decode
-        #execute
-        #update timer
-    
-    #draw if draw flag is set
-    
-    #grab input
+#CONSTANTS
+FONTS = [ 
+    0xF0, 0x90, 0x90, 0x90, 0xF0, # 0
+    0x20, 0x60, 0x20, 0x20, 0x70, # 1
+    0xF0, 0x10, 0xF0, 0x80, 0xF0, # 2
+    0xF0, 0x10, 0xF0, 0x10, 0xF0, # 3
+    0x90, 0x90, 0xF0, 0x10, 0x10, # 4
+    0xF0, 0x80, 0xF0, 0x10, 0xF0, # 5
+    0xF0, 0x80, 0xF0, 0x90, 0xF0, # 6
+    0xF0, 0x10, 0x20, 0x40, 0x40, # 7
+    0xF0, 0x90, 0xF0, 0x90, 0xF0, # 8
+    0xF0, 0x90, 0xF0, 0x10, 0xF0, # 9
+    0xF0, 0x90, 0xF0, 0x90, 0x90, # A
+    0xE0, 0x90, 0xE0, 0x90, 0xE0, # B
+    0xF0, 0x80, 0x80, 0x80, 0xF0, # C
+    0xE0, 0x90, 0x90, 0x90, 0xE0, # D
+    0xF0, 0x80, 0xF0, 0x80, 0xF0, # E
+    0xF0, 0x80, 0xF0, 0x80, 0x80  # F
+]
+FLAG_REGISTER  = 0xF
+PROGRAM_START_LOCATION = 0x200
 
 class Chip8(object):
-    FONTS = [ 
-        0xF0, 0x90, 0x90, 0x90, 0xF0, # 0
-        0x20, 0x60, 0x20, 0x20, 0x70, # 1
-        0xF0, 0x10, 0xF0, 0x80, 0xF0, # 2
-        0xF0, 0x10, 0xF0, 0x10, 0xF0, # 3
-        0x90, 0x90, 0xF0, 0x10, 0x10, # 4
-        0xF0, 0x80, 0xF0, 0x10, 0xF0, # 5
-        0xF0, 0x80, 0xF0, 0x90, 0xF0, # 6
-        0xF0, 0x10, 0x20, 0x40, 0x40, # 7
-        0xF0, 0x90, 0xF0, 0x90, 0xF0, # 8
-        0xF0, 0x90, 0xF0, 0x10, 0xF0, # 9
-        0xF0, 0x90, 0xF0, 0x90, 0x90, # A
-        0xE0, 0x90, 0xE0, 0x90, 0xE0, # B
-        0xF0, 0x80, 0x80, 0x80, 0xF0, # C
-        0xE0, 0x90, 0x90, 0x90, 0xE0, # D
-        0xF0, 0x80, 0xF0, 0x80, 0xF0, # E
-        0xF0, 0x80, 0xF0, 0x80, 0x80  # F
-    ]
-
-    FLAG_REGISTER  = 0xF
-
-    draw_flag = False
-
-    memmory = [0]*4096 #4kb of memmory, 4096 bytes
-
-    #programs start at locations 0x200 - 512
-    registers = [0]*16 #general purpose registers, 8 bit. 1byte
-
-    I = 0
-    ST = 0
-    DT = 0
-
-
-    stack_pointer = 0
-    stack = []
-
-    program_counter = 0 #16 bit executing address
-
-    display = [0] * 64 * 32 # monochrome 64 by 32 pixel display
-
-    keys = [0] * 16
+    def __init__(self, rom_name):
+        self.rom_name = rom_name
+        self.initialize()
+        self.load_rom()
 
     def perform_cycle(self):
-
-        
-        opcode = (self.memmory[self.program_counter] << 8) | self.memmory[self.program_counter+1]
+        opcode = (self.memory[self.program_counter] << 8) | self.memory[self.program_counter+1]
         first_byte_of_opcode = (opcode & 0xf000) >> 12
-        print(self.program_counter)
-        print(hex(opcode))
-        print(instruction_map[first_byte_of_opcode].__doc__)
         instruction_map[first_byte_of_opcode](self, opcode)
+        self.update_timers()
+    
+    def update_timers(self):
         if self.DT > 0:
             self.DT -= 1
         if self.ST > 0:
             self.ST -= 1
         
-        
 
-    def load_rom(self, rom_name):
-        file = open("./roms/" + rom_name, 'rb').read()
+    def load_rom(self):
+        file = open(self.rom_name, 'rb').read()
         i = 0
         while i < len(file):
-            self.memmory[i + 0x200] = file[i]
+            self.memory[i + PROGRAM_START_LOCATION] = file[i]
             i += 1
 
     def initialize(self):
-        #load fonts into memory
+        self.program_counter = PROGRAM_START_LOCATION
+        self.memory = [0]*4096 #4kb of memory, 4096 bytes
+        self.registers = [0]*16 #general purpose registers, 8 bit. 1byte
+
+        self.I = 0
+        self.ST = 0
+        self.DT = 0
+
+        self.stack_pointer = 0
+        self.stack = []
+
+        self.draw_flag = False #not actually a part of the chip, but helps with performance
+        self.display = [0] * 64 * 32 # monochrome 64 by 32 pixel display
+
+        self.keys = [0] * 16
+
+        self.load_fonts()
+    
+    def load_fonts(self):
         for i in range(80):
-            self.memmory[i] = self.FONTS[i]
-        
-        self.program_counter = 0x200
-
-        #start
+            self.memory[i] = FONTS[i]
         
 
+    def reset(self):
+        self.initialize()
+        self.load_rom()
 
+
+#INSTRUCTIONS
 def _0(chip8: Chip8, opcode): 
     """
     runs either _0nnn, _00E0, or _00EE
@@ -119,9 +98,6 @@ def _0nnn(chip8: Chip8, opcode):
 
     nnn = a 12 bit value/addr
     """
-    if(get_nnn(opcode) < 0x200):
-        print("fuck again")
-        raise Exception
     chip8.program_counter = get_nnn(opcode)
 
 def _00E0(chip8: Chip8):
@@ -243,11 +219,6 @@ def _7xkk(chip8: Chip8, opcode):
     chip8.program_counter += 2
 
 def _8(chip8: Chip8, opcode):
-    """
-    runs one of the 8 intructions
-
-    use n of the opcode
-    """
     _8_instructions_map = {
         0x0: _8xy0,
         0x1: _8xy1,
@@ -259,7 +230,6 @@ def _8(chip8: Chip8, opcode):
         0x7: _8xy7,
         0xE: _8xyE
     }
-    print(_8_instructions_map[get_n(opcode)].__doc__)
     _8_instructions_map[get_n(opcode)](chip8, opcode)
     chip8.program_counter += 2
 
@@ -336,7 +306,7 @@ def _8xy4(chip8: Chip8, opcode):
     chip8.registers[get_Vx(opcode)] = registers_sum & 0xFF
 
     if registers_sum > 255:
-        chip8.registers[chip8.FLAG_REGISTER] = 1
+        chip8.registers[FLAG_REGISTER] = 1
 
 
 
@@ -358,10 +328,10 @@ def _8xy5(chip8: Chip8, opcode):
     registers_difference = 0
 
     if Vx_register_value > Vy_register_value:
-        chip8.registers[chip8.FLAG_REGISTER] = 1
+        chip8.registers[FLAG_REGISTER] = 1
         registers_difference = Vx_register_value - Vy_register_value
     else: 
-        chip8.registers[chip8.FLAG_REGISTER] = 0
+        chip8.registers[FLAG_REGISTER] = 0
         registers_difference = Vy_register_value - Vx_register_value
 
     chip8.registers[get_Vx(opcode)] = registers_difference
@@ -380,9 +350,9 @@ def _8xy6(chip8: Chip8, opcode):
     Vx_register_value = chip8.registers[get_Vx(opcode)]
 
     if (Vx_register_value & 0x1) == 1:
-        chip8.registers[chip8.FLAG_REGISTER] = 1
+        chip8.registers[FLAG_REGISTER] = 1
     else: 
-        chip8.registers[chip8.FLAG_REGISTER] = 0
+        chip8.registers[FLAG_REGISTER] = 0
 
     
     chip8.registers[get_Vx(opcode)] = Vx_register_value // 2 
@@ -407,10 +377,10 @@ def _8xy7(chip8: Chip8, opcode):
     registers_difference = 0
 
     if Vy_register_value > Vx_register_value:
-        chip8.registers[chip8.FLAG_REGISTER] = 1
+        chip8.registers[FLAG_REGISTER] = 1
         registers_difference = Vy_register_value - Vx_register_value
     else: 
-        chip8.registers[chip8.FLAG_REGISTER] = 0
+        chip8.registers[FLAG_REGISTER] = 0
         registers_difference = Vx_register_value - Vy_register_value
 
     chip8.registers[get_Vx(opcode)] = registers_difference
@@ -429,9 +399,9 @@ def _8xyE(chip8: Chip8, opcode):
     Vx_register_value = chip8.registers[get_Vx(opcode)]
 
     if ((Vx_register_value & 0x8) >> 3) == 1:
-        chip8.registers[chip8.FLAG_REGISTER] = 1
+        chip8.registers[FLAG_REGISTER] = 1
     else: 
-        chip8.registers[chip8.FLAG_REGISTER] = 0
+        chip8.registers[FLAG_REGISTER] = 0
 
     
     chip8.registers[get_Vx(opcode)] = Vx_register_value * 2 
@@ -509,19 +479,19 @@ def _Dxyn(chip8: Chip8, opcode):
 
     collision = 0
     for i in range(n):
-        current_byte_to_display = chip8.memmory[chip8.I + i]
+        current_byte_to_display = chip8.memory[chip8.I + i]
         for j in range(8):
             mask = (0x80 >> j)
             current_pixel_to_display = ((current_byte_to_display & mask) >> (7-j)) 
-            display_bit = (Vx_register_value + ((Vy_register_value + i) *64) + j)%(64*32)
             if (Vy_register_value + i) >= 32 or (j + Vx_register_value) >= 64:
                 continue
+            display_bit = (Vx_register_value + ((Vy_register_value + i) *64) + j)
             old_pixel = chip8.display[display_bit] 
             chip8.display[display_bit] ^= current_pixel_to_display
             if old_pixel == 1 and chip8.display[display_bit]  == 0:
                 collision = 1
 
-    chip8.registers[chip8.FLAG_REGISTER] = collision
+    chip8.registers[FLAG_REGISTER] = collision
     chip8.program_counter += 2
     chip8.draw_flag = True
 
@@ -578,7 +548,6 @@ def _F(chip8: Chip8, opcode):
         0x55: _Fx55,
         0x65: _Fx65
     }
-    print(_F_instructions_map[get_kk(opcode)].__doc__)
     _F_instructions_map[get_kk(opcode)](chip8, opcode)
 
 
@@ -673,9 +642,9 @@ def _Fx33(chip8: Chip8, opcode):
     """
     Vx_register_value = chip8.registers[get_Vx(opcode)]
 
-    chip8.memmory[chip8.I] = Vx_register_value // 100
-    chip8.memmory[chip8.I + 1] = (Vx_register_value % 100) // 10
-    chip8.memmory[chip8.I + 2] = Vx_register_value % 10
+    chip8.memory[chip8.I] = Vx_register_value // 100
+    chip8.memory[chip8.I + 1] = (Vx_register_value % 100) // 10
+    chip8.memory[chip8.I + 2] = Vx_register_value % 10
 
     chip8.program_counter += 2
 
@@ -689,7 +658,7 @@ def _Fx55(chip8: Chip8, opcode):
     starting at the address in I.
     """
     for register_index in range(get_Vx(opcode) + 1):
-        chip8.memmory[register_index + chip8.I] = chip8.registers[register_index]
+        chip8.memory[register_index + chip8.I] = chip8.registers[register_index]
 
     chip8.I += (get_Vx(opcode) + 1)
     chip8.program_counter += 2
@@ -703,13 +672,10 @@ def _Fx65(chip8: Chip8, opcode):
     The interpreter reads values from memory starting at location I into registers V0 through Vx.
     """
     for register_index in range(get_Vx(opcode) + 1):
-         chip8.registers[register_index] = chip8.memmory[register_index + chip8.I]
+         chip8.registers[register_index] = chip8.memory[register_index + chip8.I]
 
     chip8.I += (get_Vx(opcode) + 1)
     chip8.program_counter += 2
-
-def _unimplemented(chip8: Chip8, opcode):
-    raise Exception("Opcode Not Implemented!")
 
 instruction_map = {
     0x0: _0,
